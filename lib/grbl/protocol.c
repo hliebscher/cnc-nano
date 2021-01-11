@@ -158,6 +158,11 @@ void protocol_main_loop()
 
     protocol_execute_realtime();  // Runtime command check point.
     if (sys.abort) { return; } // Bail to main() program loop to reset system.
+              
+    #ifdef SLEEP_ENABLE
+      // Check for sleep conditions and execute auto-park, if timeout duration elapses.
+      sleep_check();    
+    #endif
   }
 
   return; /* Never reached */
@@ -463,23 +468,18 @@ void protocol_exec_rt_system()
 
     // NOTE: Since coolant state always performs a planner sync whenever it changes, the current
     // run state can be determined by checking the parser state.
-    // NOTE: Coolant overrides only operate during IDLE, CYCLE, HOLD, and JOG states. Ignored otherwise.
+    // NOTE: Coolant overrides only operate during IDLE, CYCLE, HOLD, and JOG states. Ignored otherwise.																										
     if (rt_exec & (EXEC_COOLANT_FLOOD_OVR_TOGGLE | EXEC_COOLANT_MIST_OVR_TOGGLE)) {
       if ((sys.state == STATE_IDLE) || (sys.state & (STATE_CYCLE | STATE_HOLD | STATE_JOG))) {
         uint8_t coolant_state = gc_state.modal.coolant;
-        #ifdef ENABLE_M7
-          if (rt_exec & EXEC_COOLANT_MIST_OVR_TOGGLE) {
-            if (coolant_state & COOLANT_MIST_ENABLE) { bit_false(coolant_state,COOLANT_MIST_ENABLE); }
-            else { coolant_state |= COOLANT_MIST_ENABLE; }
-          }
-          if (rt_exec & EXEC_COOLANT_FLOOD_OVR_TOGGLE) {
-            if (coolant_state & COOLANT_FLOOD_ENABLE) { bit_false(coolant_state,COOLANT_FLOOD_ENABLE); }
-            else { coolant_state |= COOLANT_FLOOD_ENABLE; }
-          }
-        #else
+        if (rt_exec & EXEC_COOLANT_MIST_OVR_TOGGLE) {
+          if (coolant_state & COOLANT_MIST_ENABLE) { bit_false(coolant_state,COOLANT_MIST_ENABLE); }
+          else { coolant_state |= COOLANT_MIST_ENABLE; }
+        }
+        if (rt_exec & EXEC_COOLANT_FLOOD_OVR_TOGGLE) {
           if (coolant_state & COOLANT_FLOOD_ENABLE) { bit_false(coolant_state,COOLANT_FLOOD_ENABLE); }
           else { coolant_state |= COOLANT_FLOOD_ENABLE; }
-        #endif
+        }
         coolant_set_state(coolant_state); // Report counter set in coolant_set_state().
         gc_state.modal.coolant = coolant_state;
       }
@@ -517,30 +517,23 @@ static void protocol_exec_rt_suspend()
     plan_line_data_t *pl_data = &plan_data;
     memset(pl_data,0,sizeof(plan_line_data_t));
     pl_data->condition = (PL_COND_FLAG_SYSTEM_MOTION|PL_COND_FLAG_NO_FEED_OVERRIDE);
-    #ifdef USE_LINE_NUMBERS
-      pl_data->line_number = PARKING_MOTION_LINE_NUMBER;
-    #endif
+    pl_data->line_number = PARKING_MOTION_LINE_NUMBER;
   #endif
 
   plan_block_t *block = plan_get_current_block();
   uint8_t restore_condition;
-  #ifdef VARIABLE_SPINDLE
-    float restore_spindle_speed;
-    if (block == NULL) {
-      restore_condition = (gc_state.modal.spindle | gc_state.modal.coolant);
-      restore_spindle_speed = gc_state.spindle_speed;
-    } else {
-      restore_condition = (block->condition & PL_COND_SPINDLE_MASK) | coolant_get_state();
-      restore_spindle_speed = block->spindle_speed;
+  float restore_spindle_speed;
+  if (block == NULL) {
+    restore_condition = (gc_state.modal.spindle | gc_state.modal.coolant);
+    restore_spindle_speed = gc_state.spindle_speed;
+  } else {
+    restore_condition = (block->condition & PL_COND_SPINDLE_MASK) | coolant_get_state();
+    restore_spindle_speed = block->spindle_speed;
+  }
+  #ifdef DISABLE_LASER_DURING_HOLD
+    if (bit_istrue(settings.flags,BITFLAG_LASER_MODE)) { 
+      system_set_exec_accessory_override_flag(EXEC_SPINDLE_OVR_STOP);
     }
-    #ifdef DISABLE_LASER_DURING_HOLD
-      if (bit_istrue(settings.flags,BITFLAG_LASER_MODE)) { 
-        system_set_exec_accessory_override_flag(EXEC_SPINDLE_OVR_STOP);
-      }
-    #endif
-  #else
-    if (block == NULL) { restore_condition = (gc_state.modal.spindle | gc_state.modal.coolant); }
-    else { restore_condition = (block->condition & PL_COND_SPINDLE_MASK) | coolant_get_state(); }
   #endif
 
   while (sys.suspend) {
@@ -758,6 +751,13 @@ static void protocol_exec_rt_suspend()
 
       }
     }
+    
+    #ifdef SLEEP_ENABLE
+      // Check for sleep conditions and execute auto-park, if timeout duration elapses.
+      // Sleep is valid for both hold and door states, if the spindle or coolant are on or
+      // set to be re-enabled.
+      sleep_check();
+    #endif
 
     protocol_exec_rt_system();
 

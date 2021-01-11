@@ -38,16 +38,15 @@
 #define EXEC_SLEEP          bit(7) // bitmask 10000000
 
 // Alarm executor codes. Valid values (1-255). Zero is reserved.
-#define EXEC_ALARM_HARD_LIMIT                 1
-#define EXEC_ALARM_SOFT_LIMIT                 2
-#define EXEC_ALARM_ABORT_CYCLE                3
-#define EXEC_ALARM_PROBE_FAIL_INITIAL         4
-#define EXEC_ALARM_PROBE_FAIL_CONTACT         5
-#define EXEC_ALARM_HOMING_FAIL_RESET          6
-#define EXEC_ALARM_HOMING_FAIL_DOOR           7
-#define EXEC_ALARM_HOMING_FAIL_PULLOFF        8
-#define EXEC_ALARM_HOMING_FAIL_APPROACH       9
-#define EXEC_ALARM_HOMING_FAIL_DUAL_APPROACH  10
+#define EXEC_ALARM_HARD_LIMIT           1
+#define EXEC_ALARM_SOFT_LIMIT           2
+#define EXEC_ALARM_ABORT_CYCLE          3
+#define EXEC_ALARM_PROBE_FAIL_INITIAL   4
+#define EXEC_ALARM_PROBE_FAIL_CONTACT   5
+#define EXEC_ALARM_HOMING_FAIL_RESET    6
+#define EXEC_ALARM_HOMING_FAIL_DOOR     7
+#define EXEC_ALARM_HOMING_FAIL_PULLOFF  8
+#define EXEC_ALARM_HOMING_FAIL_APPROACH 9
 
 // Override bit maps. Realtime bitflags to control feed, rapid, spindle, and coolant overrides.
 // Spindle/coolant and feed/rapids are separated into two controlling flag variables.
@@ -102,18 +101,11 @@
 #define STEP_CONTROL_UPDATE_SPINDLE_PWM   bit(3)
 
 // Define control pin index for Grbl internal use. Pin maps may change, but these values don't.
-#ifdef ENABLE_SAFETY_DOOR_INPUT_PIN
-  #define N_CONTROL_PIN 4
-  #define CONTROL_PIN_INDEX_SAFETY_DOOR   bit(0)
-  #define CONTROL_PIN_INDEX_RESET         bit(1)
-  #define CONTROL_PIN_INDEX_FEED_HOLD     bit(2)
-  #define CONTROL_PIN_INDEX_CYCLE_START   bit(3)
-#else
-  #define N_CONTROL_PIN 3
-  #define CONTROL_PIN_INDEX_RESET         bit(0)
-  #define CONTROL_PIN_INDEX_FEED_HOLD     bit(1)
-  #define CONTROL_PIN_INDEX_CYCLE_START   bit(2)
-#endif
+#define N_CONTROL_PIN 4
+#define CONTROL_PIN_INDEX_SAFETY_DOOR   bit(0)
+#define CONTROL_PIN_INDEX_RESET         bit(1)
+#define CONTROL_PIN_INDEX_FEED_HOLD     bit(2)
+#define CONTROL_PIN_INDEX_CYCLE_START   bit(3)
 
 // Define spindle stop override control states.
 #define SPINDLE_STOP_OVR_DISABLED       0  // Must be zero.
@@ -131,9 +123,10 @@ typedef struct {
   uint8_t soft_limit;          // Tracks soft limit errors for the state machine. (boolean)
   uint8_t step_control;        // Governs the step segment generator depending on system state.
   uint8_t probe_succeeded;     // Tracks if last probing cycle was successful.
-  uint8_t homing_axis_lock;    // Locks axes when limits engage. Used as an axis motion mask in the stepper ISR.
-  #ifdef ENABLE_DUAL_AXIS
-    uint8_t homing_axis_lock_dual;
+  #ifdef DEFAULTS_RAMPS_BOARD
+    uint8_t homing_axis_lock[N_AXIS];    // Locks axes when limits engage. Used as an axis motion mask in the stepper ISR.
+  #else
+    uint8_t homing_axis_lock;    // Locks axes when limits engage. Used as an axis motion mask in the stepper ISR.
   #endif
   uint8_t f_override;          // Feed rate override value in percent
   uint8_t r_override;          // Rapids override value in percent
@@ -144,9 +137,7 @@ typedef struct {
   #ifdef ENABLE_PARKING_OVERRIDE_CONTROL
     uint8_t override_ctrl;     // Tracks override control states.
   #endif
-  #ifdef VARIABLE_SPINDLE
-    float spindle_speed;
-  #endif
+  float spindle_speed;
 } system_t;
 extern system_t sys;
 

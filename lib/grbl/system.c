@@ -40,18 +40,15 @@ void system_init()
 uint8_t system_control_get_state()
 {
   uint8_t control_state = 0;
-  uint8_t pin = (CONTROL_PIN & CONTROL_MASK) ^ CONTROL_MASK;
+  uint8_t pin = (CONTROL_PIN & CONTROL_MASK);
   #ifdef INVERT_CONTROL_PIN_MASK
     pin ^= INVERT_CONTROL_PIN_MASK;
   #endif
   if (pin) {
-    #ifdef ENABLE_SAFETY_DOOR_INPUT_PIN
-      if (bit_istrue(pin,(1<<CONTROL_SAFETY_DOOR_BIT))) { control_state |= CONTROL_PIN_INDEX_SAFETY_DOOR; }
-    #else
-      if (bit_istrue(pin,(1<<CONTROL_FEED_HOLD_BIT))) { control_state |= CONTROL_PIN_INDEX_FEED_HOLD; }
-    #endif
-    if (bit_istrue(pin,(1<<CONTROL_RESET_BIT))) { control_state |= CONTROL_PIN_INDEX_RESET; }
-    if (bit_istrue(pin,(1<<CONTROL_CYCLE_START_BIT))) { control_state |= CONTROL_PIN_INDEX_CYCLE_START; }
+    if (bit_isfalse(pin,(1<<CONTROL_SAFETY_DOOR_BIT))) { control_state |= CONTROL_PIN_INDEX_SAFETY_DOOR; }
+    if (bit_isfalse(pin,(1<<CONTROL_RESET_BIT))) { control_state |= CONTROL_PIN_INDEX_RESET; }
+    if (bit_isfalse(pin,(1<<CONTROL_FEED_HOLD_BIT))) { control_state |= CONTROL_PIN_INDEX_FEED_HOLD; }
+    if (bit_isfalse(pin,(1<<CONTROL_CYCLE_START_BIT))) { control_state |= CONTROL_PIN_INDEX_CYCLE_START; }
   }
   return(control_state);
 }
@@ -67,18 +64,13 @@ ISR(CONTROL_INT_vect)
   if (pin) {
     if (bit_istrue(pin,CONTROL_PIN_INDEX_RESET)) {
       mc_reset();
-    }
-    if (bit_istrue(pin,CONTROL_PIN_INDEX_CYCLE_START)) {
+    } else if (bit_istrue(pin,CONTROL_PIN_INDEX_CYCLE_START)) {
       bit_true(sys_rt_exec_state, EXEC_CYCLE_START);
-    }
-    #ifndef ENABLE_SAFETY_DOOR_INPUT_PIN
-      if (bit_istrue(pin,CONTROL_PIN_INDEX_FEED_HOLD)) {
-        bit_true(sys_rt_exec_state, EXEC_FEED_HOLD);
-    #else
-      if (bit_istrue(pin,CONTROL_PIN_INDEX_SAFETY_DOOR)) {
-        bit_true(sys_rt_exec_state, EXEC_SAFETY_DOOR);
-    #endif
-    }
+    } else if (bit_istrue(pin,CONTROL_PIN_INDEX_FEED_HOLD)) {
+      bit_true(sys_rt_exec_state, EXEC_FEED_HOLD); 
+    } else if (bit_istrue(pin,CONTROL_PIN_INDEX_SAFETY_DOOR)) {
+      bit_true(sys_rt_exec_state, EXEC_SAFETY_DOOR);
+    } 
   }
 }
 
@@ -86,11 +78,7 @@ ISR(CONTROL_INT_vect)
 // Returns if safety door is ajar(T) or closed(F), based on pin state.
 uint8_t system_check_safety_door_ajar()
 {
-  #ifdef ENABLE_SAFETY_DOOR_INPUT_PIN
     return(system_control_get_state() & CONTROL_PIN_INDEX_SAFETY_DOOR);
-  #else
-    return(false); // Input pin not enabled, so just return that it's closed.
-  #endif
 }
 
 
@@ -258,6 +246,7 @@ uint8_t system_execute_line(char *line)
             do {
               line[char_counter-helper_var] = line[char_counter];
             } while (line[char_counter++] != 0);
+            if (char_counter > EEPROM_LINE_SIZE) { return(STATUS_LINE_LENGTH_EXCEEDED); }
             // Execute gcode block to ensure block is valid.
             helper_var = gc_execute_line(line); // Set helper_var to returned status code.
             if (helper_var) { return(helper_var); }

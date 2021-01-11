@@ -203,11 +203,7 @@ void report_grbl_settings() {
   report_util_float_setting(27,settings.homing_pulloff,N_DECIMAL_SETTINGVALUE);
   report_util_float_setting(30,settings.rpm_max,N_DECIMAL_RPMVALUE);
   report_util_float_setting(31,settings.rpm_min,N_DECIMAL_RPMVALUE);
-  #ifdef VARIABLE_SPINDLE
-    report_util_uint8_setting(32,bit_istrue(settings.flags,BITFLAG_LASER_MODE));
-  #else
-    report_util_uint8_setting(32,0);
-  #endif
+  report_util_uint8_setting(32,bit_istrue(settings.flags,BITFLAG_LASER_MODE));
   // Print axis settings
   uint8_t idx, set_idx;
   uint8_t val = AXIS_SETTINGS_START_VAL;
@@ -316,16 +312,11 @@ void report_gcode_modes()
     case SPINDLE_DISABLE : serial_write('5'); break;
   }
 
-  #ifdef ENABLE_M7
-    if (gc_state.modal.coolant) { // Note: Multiple coolant states may be active at the same time.
-      if (gc_state.modal.coolant & PL_COND_FLAG_COOLANT_MIST) { report_util_gcode_modes_M(); serial_write('7'); }
-      if (gc_state.modal.coolant & PL_COND_FLAG_COOLANT_FLOOD) { report_util_gcode_modes_M(); serial_write('8'); }
-    } else { report_util_gcode_modes_M(); serial_write('9'); }
-  #else
-    report_util_gcode_modes_M();
-    if (gc_state.modal.coolant) { serial_write('8'); }
-    else { serial_write('9'); }
-  #endif
+  report_util_gcode_modes_M();
+  if (gc_state.modal.coolant) { // Note: Multiple coolant states may be active at the same time.
+    if (gc_state.modal.coolant & PL_COND_FLAG_COOLANT_MIST) { serial_write('7'); }
+    if (gc_state.modal.coolant & PL_COND_FLAG_COOLANT_FLOOD) { serial_write('8'); }
+  } else { serial_write('9'); }
 
   #ifdef ENABLE_PARKING_OVERRIDE_CONTROL
     if (sys.override_ctrl == OVERRIDE_PARKING_MOTION) { 
@@ -340,10 +331,8 @@ void report_gcode_modes()
   printPgmString(PSTR(" F"));
   printFloat_RateValue(gc_state.feed_rate);
 
-  #ifdef VARIABLE_SPINDLE
-    printPgmString(PSTR(" S"));
-    printFloat(gc_state.spindle_speed,N_DECIMAL_RPMVALUE);
-  #endif
+  printPgmString(PSTR(" S"));
+  printFloat(gc_state.spindle_speed,N_DECIMAL_RPMVALUE);
 
   report_util_feedback_line_feed();
 }
@@ -373,15 +362,10 @@ void report_build_info(char *line)
   printString(line);
   report_util_feedback_line_feed();
   printPgmString(PSTR("[OPT:")); // Generate compile-time build option list
-  #ifdef VARIABLE_SPINDLE
-    serial_write('V');
-  #endif
-  #ifdef USE_LINE_NUMBERS
-    serial_write('N');
-  #endif
-  #ifdef ENABLE_M7
-    serial_write('M');
-  #endif
+  serial_write('V'); // Variable spindle standard.
+  serial_write('N'); // Line number reporting standard.
+  serial_write('M'); // M7 mist coolant standard.
+  serial_write('+'); // Safety door support standard.
   #ifdef COREXY
     serial_write('C');
   #endif
@@ -415,9 +399,6 @@ void report_build_info(char *line)
   #ifndef HOMING_INIT_LOCK
     serial_write('L');
   #endif
-  #ifdef ENABLE_SAFETY_DOOR_INPUT_PIN
-    serial_write('+');
-  #endif  
   #ifndef ENABLE_RESTORE_EEPROM_WIPE_ALL // NOTE: Shown when disabled.
     serial_write('*');
   #endif
@@ -435,9 +416,6 @@ void report_build_info(char *line)
   #endif
   #ifndef FORCE_BUFFER_SYNC_DURING_WCO_CHANGE // NOTE: Shown when disabled.
     serial_write('W');
-  #endif
-  #ifdef ENABLE_DUAL_AXIS
-    serial_write('2');
   #endif
   // NOTE: Compiled values, like override increments/max/min values, may be added at some point later.
   serial_write(',');
@@ -537,31 +515,24 @@ void report_realtime_status()
     }
   #endif
 
-  #ifdef USE_LINE_NUMBERS
-    #ifdef REPORT_FIELD_LINE_NUMBERS
-      // Report current line number
-      plan_block_t * cur_block = plan_get_current_block();
-      if (cur_block != NULL) {
-        uint32_t ln = cur_block->line_number;
-        if (ln > 0) {
-          printPgmString(PSTR("|Ln:"));
-          printInteger(ln);
-        }
+  #ifdef REPORT_FIELD_LINE_NUMBERS
+    // Report current line number
+    plan_block_t * cur_block = plan_get_current_block();
+    if (cur_block != NULL) {
+      uint32_t ln = cur_block->line_number;
+      if (ln > 0) {
+        printPgmString(PSTR("|Ln:"));
+        printInteger(ln);
       }
-    #endif
+    }
   #endif
 
   // Report realtime feed speed
   #ifdef REPORT_FIELD_CURRENT_FEED_SPEED
-    #ifdef VARIABLE_SPINDLE
-      printPgmString(PSTR("|FS:"));
-      printFloat_RateValue(st_get_realtime_rate());
-      serial_write(',');
-      printFloat(sys.spindle_speed,N_DECIMAL_RPMVALUE);
-    #else
-      printPgmString(PSTR("|F:"));
-      printFloat_RateValue(st_get_realtime_rate());
-    #endif      
+    printPgmString(PSTR("|FS:"));
+    printFloat_RateValue(st_get_realtime_rate());
+    serial_write(',');
+    printFloat(sys.spindle_speed,N_DECIMAL_RPMVALUE);
   #endif
 
   #ifdef REPORT_FIELD_PIN_STATE
@@ -572,26 +543,12 @@ void report_realtime_status()
       printPgmString(PSTR("|Pn:"));
       if (prb_pin_state) { serial_write('P'); }
       if (lim_pin_state) {
-        #ifdef ENABLE_DUAL_AXIS
-          #if (DUAL_AXIS_SELECT == X_AXIS)
-            if (bit_istrue(lim_pin_state,(bit(X_AXIS)|bit(N_AXIS)))) { serial_write('X'); }
-            if (bit_istrue(lim_pin_state,bit(Y_AXIS))) { serial_write('Y'); }
-          #endif
-          #if (DUAL_AXIS_SELECT == Y_AXIS)
-            if (bit_istrue(lim_pin_state,bit(X_AXIS))) { serial_write('X'); }
-            if (bit_istrue(lim_pin_state,(bit(Y_AXIS)|bit(N_AXIS)))) { serial_write('Y'); }
-          #endif
-          if (bit_istrue(lim_pin_state,bit(Z_AXIS))) { serial_write('Z'); }
-        #else
-          if (bit_istrue(lim_pin_state,bit(X_AXIS))) { serial_write('X'); }
-          if (bit_istrue(lim_pin_state,bit(Y_AXIS))) { serial_write('Y'); }
-          if (bit_istrue(lim_pin_state,bit(Z_AXIS))) { serial_write('Z'); }
-        #endif
+        if (bit_istrue(lim_pin_state,bit(X_AXIS))) { serial_write('X'); }
+        if (bit_istrue(lim_pin_state,bit(Y_AXIS))) { serial_write('Y'); }
+        if (bit_istrue(lim_pin_state,bit(Z_AXIS))) { serial_write('Z'); }
       }
       if (ctrl_pin_state) {
-        #ifdef ENABLE_SAFETY_DOOR_INPUT_PIN
-          if (bit_istrue(ctrl_pin_state,CONTROL_PIN_INDEX_SAFETY_DOOR)) { serial_write('D'); }
-        #endif
+        if (bit_istrue(ctrl_pin_state,CONTROL_PIN_INDEX_SAFETY_DOOR)) { serial_write('D'); }
         if (bit_istrue(ctrl_pin_state,CONTROL_PIN_INDEX_RESET)) { serial_write('R'); }
         if (bit_istrue(ctrl_pin_state,CONTROL_PIN_INDEX_FEED_HOLD)) { serial_write('H'); }
         if (bit_istrue(ctrl_pin_state,CONTROL_PIN_INDEX_CYCLE_START)) { serial_write('S'); }
@@ -629,22 +586,11 @@ void report_realtime_status()
       if (sp_state || cl_state) {
         printPgmString(PSTR("|A:"));
         if (sp_state) { // != SPINDLE_STATE_DISABLE
-          #ifdef VARIABLE_SPINDLE 
-            #ifdef USE_SPINDLE_DIR_AS_ENABLE_PIN
-              serial_write('S'); // CW
-            #else
-              if (sp_state == SPINDLE_STATE_CW) { serial_write('S'); } // CW
-              else { serial_write('C'); } // CCW
-            #endif
-          #else
-            if (sp_state & SPINDLE_STATE_CW) { serial_write('S'); } // CW
-            else { serial_write('C'); } // CCW
-          #endif
+          if (sp_state == SPINDLE_STATE_CW) { serial_write('S'); } // CW
+          else { serial_write('C'); } // CCW
         }
         if (cl_state & COOLANT_STATE_FLOOD) { serial_write('F'); }
-        #ifdef ENABLE_M7
-          if (cl_state & COOLANT_STATE_MIST) { serial_write('M'); }
-        #endif
+        if (cl_state & COOLANT_STATE_MIST) { serial_write('M'); }
       }  
     }
   #endif

@@ -46,13 +46,13 @@ void printPgmString(const char *s)
 // 	if (n == 0) {
 // 		serial_write('0');
 // 		return;
-// 	}
-//
+// 	} 
+// 
 // 	while (n > 0) {
 // 		buf[i++] = n % base;
 // 		n /= base;
 // 	}
-//
+// 
 // 	for (; i > 0; i--)
 // 		serial_write(buf[i - 1] < 10 ?
 // 			'0' + buf[i - 1] :

@@ -318,12 +318,8 @@ uint8_t plan_buffer_line(float *target, plan_line_data_t *pl_data)
   plan_block_t *block = &block_buffer[block_buffer_head];
   memset(block,0,sizeof(plan_block_t)); // Zero all block values.
   block->condition = pl_data->condition;
-  #ifdef VARIABLE_SPINDLE
-    block->spindle_speed = pl_data->spindle_speed;
-  #endif
-  #ifdef USE_LINE_NUMBERS
-    block->line_number = pl_data->line_number;
-  #endif
+  block->spindle_speed = pl_data->spindle_speed;
+  block->line_number = pl_data->line_number;
 
   // Compute and store initial move distance data.
   int32_t target_steps[N_AXIS], position_steps[N_AXIS];
@@ -374,7 +370,11 @@ uint8_t plan_buffer_line(float *target, plan_line_data_t *pl_data)
     unit_vec[idx] = delta_mm; // Store unit vector numerator
 
     // Set direction bits. Bit enabled always means direction is negative.
-    if (delta_mm < 0.0 ) { block->direction_bits |= get_direction_pin_mask(idx); }
+    #ifdef DEFAULTS_RAMPS_BOARD
+      if (delta_mm < 0.0 ) { block->direction_bits[idx] |= get_direction_pin_mask(idx); }
+    #else
+      if (delta_mm < 0.0 ) { block->direction_bits |= get_direction_pin_mask(idx); }
+    #endif // DEFAULTS_RAMPS_BOARD
   }
 
   // Bail if this is a zero-length block. Highly unlikely to occur.
@@ -456,7 +456,7 @@ uint8_t plan_buffer_line(float *target, plan_line_data_t *pl_data)
     float nominal_speed = plan_compute_profile_nominal_speed(block);
     plan_compute_profile_parameters(block, nominal_speed, pl.previous_nominal_speed);
     pl.previous_nominal_speed = nominal_speed;
-    
+
     // Update previous path unit_vector and planner position.
     memcpy(pl.previous_unit_vec, unit_vec, sizeof(unit_vec)); // pl.previous_unit_vec[] = unit_vec[]
     memcpy(pl.position, target_steps, sizeof(target_steps)); // pl.position[] = target_steps[]

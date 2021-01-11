@@ -25,11 +25,7 @@
 
 // The number of linear motions that can be in the plan at any give time
 #ifndef BLOCK_BUFFER_SIZE
-  #ifdef USE_LINE_NUMBERS
-    #define BLOCK_BUFFER_SIZE 15
-  #else
-    #define BLOCK_BUFFER_SIZE 16
-  #endif
+  #define BLOCK_BUFFER_SIZE 36
 #endif
 
 // Returned status message from planner.
@@ -57,13 +53,14 @@ typedef struct {
   // NOTE: Used by stepper algorithm to execute the block correctly. Do not alter these values.
   uint32_t steps[N_AXIS];    // Step count along each axis
   uint32_t step_event_count; // The maximum step axis count and number of steps required to complete this block.
-  uint8_t direction_bits;    // The direction bit set for this block (refers to *_DIRECTION_BIT in config.h)
-
+  #ifdef DEFAULTS_RAMPS_BOARD
+    uint8_t direction_bits[N_AXIS];    // The direction bit set for this block (refers to *_DIRECTION_BIT in config.h)
+  #else
+    uint8_t direction_bits;    // The direction bit set for this block (refers to *_DIRECTION_BIT in config.h)
+  #endif // DEFAULTS_RAMPS_BOARD
   // Block condition data to ensure correct execution depending on states and overrides.
   uint8_t condition;      // Block bitflag variable defining block run conditions. Copied from pl_line_data.
-  #ifdef USE_LINE_NUMBERS
-    int32_t line_number;  // Block line number for real-time reporting. Copied from pl_line_data.
-  #endif
+  int32_t line_number;  // Block line number for real-time reporting. Copied from pl_line_data.
 
   // Fields used by the motion planner to manage acceleration. Some of these values may be updated
   // by the stepper module during execution of special motion cases for replanning purposes.
@@ -79,10 +76,8 @@ typedef struct {
   float rapid_rate;             // Axis-limit adjusted maximum rate for this block direction in (mm/min)
   float programmed_rate;        // Programmed rate of this block (mm/min).
 
-  #ifdef VARIABLE_SPINDLE
-    // Stored spindle speed data used by spindle overrides and resuming methods.
-    float spindle_speed;    // Block spindle speed. Copied from pl_line_data.
-  #endif
+  // Stored spindle speed data used by spindle overrides and resuming methods.
+  float spindle_speed;    // Block spindle speed. Copied from pl_line_data.
 } plan_block_t;
 
 
@@ -90,10 +85,8 @@ typedef struct {
 typedef struct {
   float feed_rate;          // Desired feed rate for line motion. Value is ignored, if rapid motion.
   float spindle_speed;      // Desired spindle speed through line motion.
+  int32_t line_number;    // Desired line number to report when executing.
   uint8_t condition;        // Bitflag variable to indicate planner conditions. See defines above.
-  #ifdef USE_LINE_NUMBERS
-    int32_t line_number;    // Desired line number to report when executing.
-  #endif
 } plan_line_data_t;
 
 
